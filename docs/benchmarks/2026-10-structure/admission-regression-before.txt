@@ -1,0 +1,5 @@
+--- FAIL: TestReconnectResumesAfterAdmissionPressure (2.01s)
+    scaling_test.go:96: maintained endpoint never resumed after capacity became available without new application traffic
+FAIL
+FAIL	github.com/RC-CHN/wg-quic/internal/bind	2.021s
+FAIL

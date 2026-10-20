@@ -1,0 +1,36 @@
+goos: linux
+goarch: amd64
+pkg: github.com/RC-CHN/wg-quic/internal/bind
+cpu: Intel(R) Xeon(R) CPU Max 9470C
+BenchmarkSessionLifecycle/1-104      	       1	     49856 ns/op	   72104 B/op	      35 allocs/op
+BenchmarkSessionLifecycle/1-104      	       1	     90975 ns/op	   72104 B/op	      35 allocs/op
+BenchmarkSessionLifecycle/1-104      	       1	     50645 ns/op	   72104 B/op	      35 allocs/op
+BenchmarkSessionLifecycle/32-104     	       1	    815995 ns/op	 2327680 B/op	     959 allocs/op
+BenchmarkSessionLifecycle/32-104     	       1	   1970443 ns/op	 2327680 B/op	     959 allocs/op
+BenchmarkSessionLifecycle/32-104     	       1	   1281793 ns/op	 2327584 B/op	     959 allocs/op
+BenchmarkSessionLifecycle/256-104    	       1	   5294203 ns/op	18338656 B/op	    7473 allocs/op
+BenchmarkSessionLifecycle/256-104    	       1	  10341082 ns/op	18344120 B/op	    7479 allocs/op
+BenchmarkSessionLifecycle/256-104    	       1	   8967284 ns/op	18338640 B/op	    7472 allocs/op
+BenchmarkSessionLifecycle/1024-104   	       1	  16421095 ns/op	73044344 B/op	   30535 allocs/op
+BenchmarkSessionLifecycle/1024-104   	       1	  23269610 ns/op	73038768 B/op	   30528 allocs/op
+BenchmarkSessionLifecycle/1024-104   	       1	  21069304 ns/op	73038672 B/op	   30528 allocs/op
+BenchmarkTransportThroughput/salamander-104         	       1	3012796631 ns/op	      1169 Mbps
+--- BENCH: BenchmarkTransportThroughput/salamander-104
+    throughput_test.go:159: mode=salamander sent=638663 packets delivered=438403840 bytes in 3s
+BenchmarkTransportThroughput/salamander-104         	       1	3004898607 ns/op	      1132 Mbps
+--- BENCH: BenchmarkTransportThroughput/salamander-104
+    throughput_test.go:159: mode=salamander sent=625791 packets delivered=424400640 bytes in 3s
+BenchmarkTransportThroughput/salamander-104         	       1	3005184988 ns/op	      1190 Mbps
+--- BENCH: BenchmarkTransportThroughput/salamander-104
+    throughput_test.go:159: mode=salamander sent=683158 packets delivered=446273280 bytes in 3s
+BenchmarkTransportThroughput/none-104               	       1	3005367098 ns/op	      1337 Mbps
+--- BENCH: BenchmarkTransportThroughput/none-104
+    throughput_test.go:159: mode=none sent=650755 packets delivered=501290240 bytes in 3s
+BenchmarkTransportThroughput/none-104               	       1	3004921511 ns/op	      1361 Mbps
+--- BENCH: BenchmarkTransportThroughput/none-104
+    throughput_test.go:159: mode=none sent=647932 packets delivered=510438400 bytes in 3s
+BenchmarkTransportThroughput/none-104               	       1	3005178554 ns/op	      1335 Mbps
+--- BENCH: BenchmarkTransportThroughput/none-104
+    throughput_test.go:159: mode=none sent=646676 packets delivered=500776960 bytes in 3s
+PASS
+ok  	github.com/RC-CHN/wg-quic/internal/bind	18.188s

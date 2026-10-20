@@ -1,0 +1,28 @@
+=== RUN   TestWireGuardImpairedTraffic
+=== RUN   TestWireGuardImpairedTraffic/random_loss/off
+    robustness_test.go:308: fec=off intact_unique=137/160 outer_drops=40 fec_recovered=0
+=== RUN   TestWireGuardImpairedTraffic/random_loss/auto
+    robustness_test.go:308: fec=auto intact_unique=156/160 outer_drops=100 fec_recovered=29
+=== RUN   TestWireGuardImpairedTraffic/burst_loss/off
+    robustness_test.go:308: fec=off intact_unique=137/160 outer_drops=58 fec_recovered=0
+=== RUN   TestWireGuardImpairedTraffic/burst_loss/auto
+    robustness_test.go:308: fec=auto intact_unique=141/160 outer_drops=138 fec_recovered=5
+=== RUN   TestWireGuardImpairedTraffic/reverse_starvation/off
+    robustness_test.go:308: fec=off intact_unique=147/160 outer_drops=42 fec_recovered=0
+=== RUN   TestWireGuardImpairedTraffic/reverse_starvation/auto
+    robustness_test.go:308: fec=auto intact_unique=146/160 outer_drops=60 fec_recovered=0
+=== RUN   TestWireGuardImpairedTraffic/reorder_jitter/off
+    robustness_test.go:308: fec=off intact_unique=148/160 outer_drops=0 fec_recovered=0
+=== RUN   TestWireGuardImpairedTraffic/reorder_jitter/auto
+    robustness_test.go:308: fec=auto intact_unique=116/160 outer_drops=0 fec_recovered=52
+--- PASS: TestWireGuardImpairedTraffic (33.14s)
+    --- PASS: TestWireGuardImpairedTraffic/random_loss/off (4.15s)
+    --- PASS: TestWireGuardImpairedTraffic/random_loss/auto (4.14s)
+    --- PASS: TestWireGuardImpairedTraffic/burst_loss/off (4.14s)
+    --- PASS: TestWireGuardImpairedTraffic/burst_loss/auto (4.14s)
+    --- PASS: TestWireGuardImpairedTraffic/reverse_starvation/off (4.14s)
+    --- PASS: TestWireGuardImpairedTraffic/reverse_starvation/auto (4.15s)
+    --- PASS: TestWireGuardImpairedTraffic/reorder_jitter/off (4.13s)
+    --- PASS: TestWireGuardImpairedTraffic/reorder_jitter/auto (4.14s)
+PASS
+ok  	github.com/RC-CHN/wg-quic/internal/bind	34.180s

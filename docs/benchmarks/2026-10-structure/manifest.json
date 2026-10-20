@@ -1,0 +1,86 @@
+{
+  "base_commit": "36ec7fc1b57b3a475496dab6192b800a5d78b748",
+  "go": "go version go1.26.3 linux/amd64",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "state": "uncommitted working tree",
+  "binary_sha256": {
+    "before": "b0f135c095105869155328d00abf32d6e4ba13288035a0f1592b3f190efe87e2",
+    "after": "b0fab4df1b867fe1832b3d4f8a664386250bc4b2d69e0d879d0541a2c1ecf9a4"
+  },
+  "method": {
+    "profiles": {
+      "repetitions": 1,
+      "duration_seconds": 5,
+      "container_cpus": 1,
+      "gomaxprocs": 2,
+      "mode": "fec-obfs"
+    },
+    "loopback": {
+      "repetitions": 3,
+      "sample_seconds": 3
+    },
+    "event_append": {
+      "repetitions": 3,
+      "benchtime": "500ms",
+      "history_size": 4096
+    }
+  },
+  "limitations": [
+    "Profile trials are single short samples with unpinned CPUs and synthetic random impairment, not statistically significant speedup estimates.",
+    "Benchmarked binaries predate final import formatting and comment-only production edits; function bodies match the tested implementation.",
+    "The first baseline profile runner was edited while its shell was running and exited with trailing shell parse errors after all 16 trials; all 16 raw trial rows completed successfully. The after runner used an immutable script snapshot.",
+    "Windows/FreeBSD bind test binaries were cross-compiled, not run natively.",
+    "Connection-scale measurements use opaque bind datagrams and raised pending-auth admission, not 128 authenticated WireGuard peers."
+  ],
+  "validation": {
+    "go_test": "passed",
+    "go_test_race": "passed",
+    "independent_rust_interop": "passed (normal Go suite with WG_QUIC_RUST_INTEROP set)",
+    "privileged_container_interop": "passed",
+    "vet_bind": "passed",
+    "shellcheck": "passed",
+    "recovery_analyzer_unit_tests": "3 passed",
+    "windows_amd64_bind_cross_compile": "passed",
+    "freebsd_amd64_bind_cross_compile": "passed",
+    "production_timeout_recovery": "passed, 180 seconds, every clean interval checked",
+    "saturated_fault_trials": "8/8 completed"
+  },
+  "production_bind_sources_sha256": {
+    "internal/bind/admission.go": "fd6411c844d4d681ff563a44558365940b107a89893a4a1f5d0d0e7e6e597bfc",
+    "internal/bind/bind.go": "c3395aaac880cfd95f0fd1e7218019b846d4747e94186cc9de210ac9f4c0157b",
+    "internal/bind/config.go": "40e08529651cab77f54357a7b1d933edab7746edcfd78c896fb04d4998483be8",
+    "internal/bind/endpoint.go": "ad2c7072df2572902bf7c1e6ca2f300955b98868baaebf1adb6ba964750b46c6",
+    "internal/bind/endpoint_policy.go": "92545c1db95d8ad35a6c48d7051ed0b320cdf35f3adf8089d6f4aa629a6d0dcf",
+    "internal/bind/endpoint_status.go": "b9db4048b6d812ce3f2281a4c2396926ec3e3e5f4cb7dee667d76dee17d4068a",
+    "internal/bind/event_log.go": "6f17cd35965451523515faf687665cc3983d8369d24600974fbdd54f2245a2dd",
+    "internal/bind/framing.go": "48c94c900f2df8a98fba51d363af3c6be66d89a65bb2294382c00cdd6a135817",
+    "internal/bind/priority_send.go": "310f9cee2074a8d0ebdc35144ac7b8e19be1bc31cfe0635a69f9330c1879f242",
+    "internal/bind/reconnect.go": "d3ed3c306a721086713efe671941d5beb3fff073b79f47b1b24840644cb56a5a",
+    "internal/bind/send_budget.go": "bf0b25b2474b805536c1b467e83292c4cc80075c4a9722d5cc5ff3a34f9f5bc7",
+    "internal/bind/session.go": "36f0153397c38957d0a2f93bb2f10bd3901e1d9fa3d51d2041feab2c25d1e5bc",
+    "internal/bind/session_receive.go": "d8f61b1c37f608a4cdb27eb9eb512bf329b19f16f77fc6502f5a109f29958b64",
+    "internal/bind/session_send.go": "e6533a84abfb7483aa5eca07aa4c10e2c0ff8772c13670372a1fa2889d5c0c81",
+    "internal/bind/telemetry.go": "9ddc0a3d31592b692a9731cc02c176c66119731c57f61af99562034ed8ada908"
+  },
+  "retained_files_sha256": {
+    "admission-regression-before.txt": "7c33fddf16dc64450ad0db480ff9d9514db8b5d460e7149e51a785b0f3853cc1",
+    "cold-start-outages.txt": "ac70689130146621fa8c5f2ff93948df3eb23e2dd94b38220962a00097647af5",
+    "connections.txt": "1254611886dbbfff391e48122e6287edf08da28cbd96db43f7b1aeb403951bb8",
+    "events-after.txt": "bd5d4d859587f172936bb95b8a090cf1df5fde134a7006eb05d412ab13ab7444",
+    "events-before.txt": "bb10b7ce6494670c4cdd4f22e0e85572b97b131ab7e9b1465bbb95be38b58fac",
+    "go-test-race.txt": "180fad50d7fde27a760f02d24202f5f80c0a467b557b7026d0005d22fc850a9d",
+    "go-test.txt": "c20508cdab58d7fe1b7ed98334c67371af2b58add7bd08ec1cb7c4ec9724d898",
+    "loopback-after.txt": "ee58626a0f61d201d5a348c3b1d8e092c1b5ccd77c7d9108b215cb3313eb08a4",
+    "loopback-before.txt": "6644dfc975e4bc93b8dfa8d7c0de819f721d5b3e52e459a34db01678c93636ad",
+    "profiles-after.csv": "1923f98de3a9e9f9d0b70fbe109489aae70bc8a70e9f87d4b544da150cda0168",
+    "profiles-before.csv": "25234bf7f1dd565c160be1d026e00823930d99cde5a7e800ec23ea30aafc259d",
+    "recovery-SHA256SUMS": "39b187c06027567b97fdd510445b588f6f405d320f68d7f730402cf8e0bc2e30",
+    "recovery-phases.csv": "822c0c55f85ba2070cff7fc10ae11a7c58034a58c674094d7f9f0c7270ecb02e",
+    "recovery-status-a.ndjson.gz": "10bafb920f00ac356fa1bdc8c9e4f32dd50ef83864df1540bf795d71f5b0cce7",
+    "recovery-status-b.ndjson.gz": "ec5c0dcaef0c895b1a9562a0602a4f10d34d2c6e1aeeda60f77a94148eaac507",
+    "recovery-traffic.ndjson": "fde5e081bcb6fa0d75ac7b1f41ba1ff22184c74bc62d5bc7740af1a673b88c9a",
+    "recovery.json": "89ccb1401bbbbfd35f1a9240fbdcc65f2b2d96914aaf9b4616b7a8c37fa11f10",
+    "robustness.csv": "325741ccfbdf78b2dc7f76286939a4a51a1ebc8469c4ef38a951cb9eda408289",
+    "traffic-integrity-race.txt": "11e0b5eff3b3ce741ab4f60c3d086070ce0fc37e175f9203afee8018acc1ab82"
+  }
+}

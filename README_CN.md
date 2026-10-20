@@ -567,6 +567,10 @@ cache 下载或替换这两个实现。
 
 ## 开发和验证
 
+传输层职责拆分、连接数压力修复，以及冷启动、单向断网和持续数据校验的测试结果见
+[代码结构与鲁棒性验证报告](docs/CODE-STRUCTURE-VALIDATION.md)。新增入口为
+`make test-robustness`、`make test-recovery` 和 `make benchmark-robustness`。
+
 常规本地检查：
 
 ```sh

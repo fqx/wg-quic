@@ -1,0 +1,63 @@
+=== RUN   TestWireGuardImpairedColdStart
+=== RUN   TestWireGuardImpairedColdStart/clean/off
+    robustness_test.go:156: first_verified_delivery=37.226223ms reverse_delivery=31.360958ms outer_drops=0
+=== RUN   TestWireGuardImpairedColdStart/clean/auto
+    robustness_test.go:156: first_verified_delivery=38.028894ms reverse_delivery=30.410325ms outer_drops=0
+=== RUN   TestWireGuardImpairedColdStart/random_10_percent/off
+    robustness_test.go:156: first_verified_delivery=38.063425ms reverse_delivery=30.974572ms outer_drops=2
+=== RUN   TestWireGuardImpairedColdStart/random_10_percent/auto
+    robustness_test.go:156: first_verified_delivery=38.322683ms reverse_delivery=31.214557ms outer_drops=2
+=== RUN   TestWireGuardImpairedColdStart/reverse_loss_25_percent/off
+    robustness_test.go:156: first_verified_delivery=5.079310787s reverse_delivery=56.420423ms outer_drops=10
+=== RUN   TestWireGuardImpairedColdStart/reverse_loss_25_percent/auto
+    robustness_test.go:156: first_verified_delivery=5.080921763s reverse_delivery=58.390562ms outer_drops=15
+=== RUN   TestWireGuardImpairedColdStart/burst_and_reorder/off
+    robustness_test.go:156: first_verified_delivery=926.513252ms reverse_delivery=31.291172ms outer_drops=12
+=== RUN   TestWireGuardImpairedColdStart/burst_and_reorder/auto
+    robustness_test.go:156: first_verified_delivery=927.774004ms reverse_delivery=33.254472ms outer_drops=12
+=== RUN   TestWireGuardImpairedColdStart/jitter/off
+    robustness_test.go:156: first_verified_delivery=164.005231ms reverse_delivery=67.582181ms outer_drops=1
+=== RUN   TestWireGuardImpairedColdStart/jitter/auto
+    robustness_test.go:156: first_verified_delivery=169.907382ms reverse_delivery=66.06061ms outer_drops=1
+=== RUN   TestWireGuardImpairedColdStart/satellite/off
+    robustness_test.go:156: first_verified_delivery=1.556139159s reverse_delivery=325.315102ms outer_drops=1
+=== RUN   TestWireGuardImpairedColdStart/satellite/auto
+    robustness_test.go:156: first_verified_delivery=1.558409392s reverse_delivery=329.503452ms outer_drops=1
+--- PASS: TestWireGuardImpairedColdStart (16.76s)
+    --- PASS: TestWireGuardImpairedColdStart/clean/off (0.08s)
+    --- PASS: TestWireGuardImpairedColdStart/clean/auto (0.07s)
+    --- PASS: TestWireGuardImpairedColdStart/random_10_percent/off (0.07s)
+    --- PASS: TestWireGuardImpairedColdStart/random_10_percent/auto (0.07s)
+    --- PASS: TestWireGuardImpairedColdStart/reverse_loss_25_percent/off (5.14s)
+    --- PASS: TestWireGuardImpairedColdStart/reverse_loss_25_percent/auto (5.14s)
+    --- PASS: TestWireGuardImpairedColdStart/burst_and_reorder/off (0.96s)
+    --- PASS: TestWireGuardImpairedColdStart/burst_and_reorder/auto (0.96s)
+    --- PASS: TestWireGuardImpairedColdStart/jitter/off (0.24s)
+    --- PASS: TestWireGuardImpairedColdStart/jitter/auto (0.24s)
+    --- PASS: TestWireGuardImpairedColdStart/satellite/off (1.88s)
+    --- PASS: TestWireGuardImpairedColdStart/satellite/auto (1.89s)
+=== RUN   TestWireGuardOutageRecovery
+=== RUN   TestWireGuardOutageRecovery/short_bidirectional
+    robustness_test.go:196: cycle=0 verified_recovery=30.654592ms drops=6
+=== RUN   TestWireGuardOutageRecovery/idle_timeout_bidirectional
+    robustness_test.go:196: cycle=0 verified_recovery=94.834008ms drops=29
+=== RUN   TestWireGuardOutageRecovery/forward_blackhole
+    robustness_test.go:196: cycle=0 verified_recovery=106.067553ms drops=23
+=== RUN   TestWireGuardOutageRecovery/reverse_blackhole
+    robustness_test.go:196: cycle=0 verified_recovery=193.960739ms drops=30
+=== RUN   TestWireGuardOutageRecovery/flapping
+    robustness_test.go:196: cycle=0 verified_recovery=31.008075ms drops=18
+    robustness_test.go:196: cycle=1 verified_recovery=31.272317ms drops=19
+    robustness_test.go:196: cycle=2 verified_recovery=30.736218ms drops=18
+    robustness_test.go:196: cycle=3 verified_recovery=30.837313ms drops=19
+--- PASS: TestWireGuardOutageRecovery (6.76s)
+    --- PASS: TestWireGuardOutageRecovery/short_bidirectional (0.24s)
+    --- PASS: TestWireGuardOutageRecovery/idle_timeout_bidirectional (1.50s)
+    --- PASS: TestWireGuardOutageRecovery/forward_blackhole (1.51s)
+    --- PASS: TestWireGuardOutageRecovery/reverse_blackhole (1.59s)
+    --- PASS: TestWireGuardOutageRecovery/flapping (1.93s)
+=== RUN   TestWireGuardInitiallyOffline
+    robustness_test.go:225: online_to_first_verified_delivery=4.802923004s
+--- PASS: TestWireGuardInitiallyOffline (5.04s)
+PASS
+ok  	github.com/RC-CHN/wg-quic/internal/bind	28.575s

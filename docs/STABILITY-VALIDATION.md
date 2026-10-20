@@ -1,5 +1,9 @@
 # Long-running stability and adaptive transport validation
 
+For the 2026-10-20 structure refactor, connection scaling, expanded cold-start
+and outage matrix, and checked production-timeout recovery results, see
+[transport structure and resilience validation](CODE-STRUCTURE-VALIDATION.md).
+
 This investigation starts from v0.4.1 (`bd405b6`) and targets three reported
 symptoms: a tunnel that starts but cannot deliver traffic until restarted,
 failures after extended use, and automatic FEC reducing useful throughput on

@@ -1,0 +1,32 @@
+{
+  "verified_bytes_per_direction": 23068672,
+  "longest_delivery_gap_seconds": 27.490653748,
+  "application_connections": 5,
+  "application_socket_errors": 34,
+  "recoveries": [
+    {
+      "after": "startup",
+      "recovery_upper_bound_seconds": 0.706
+    },
+    {
+      "after": "burst",
+      "recovery_upper_bound_seconds": 1.917
+    },
+    {
+      "after": "forward-blackhole",
+      "recovery_upper_bound_seconds": 7.205
+    },
+    {
+      "after": "reverse-blackhole",
+      "recovery_upper_bound_seconds": 1.484
+    },
+    {
+      "after": "slow",
+      "recovery_upper_bound_seconds": 0.649
+    },
+    {
+      "after": "blackhole",
+      "recovery_upper_bound_seconds": 0.851
+    }
+  ]
+}

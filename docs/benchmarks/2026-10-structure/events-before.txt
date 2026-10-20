@@ -1,0 +1,9 @@
+goos: linux
+goarch: amd64
+pkg: github.com/RC-CHN/wg-quic/internal/bind
+cpu: Intel(R) Xeon(R) CPU Max 9470C
+BenchmarkSessionEventHistory-104     	   52716	     10685 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSessionEventHistory-104     	   60500	      9602 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSessionEventHistory-104     	   59403	      9707 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/RC-CHN/wg-quic/internal/bind	2.081s

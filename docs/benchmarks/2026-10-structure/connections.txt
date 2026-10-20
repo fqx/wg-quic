@@ -1,0 +1,16 @@
+=== RUN   TestTransportConnectionScale
+=== RUN   TestTransportConnectionScale/1
+    scaling_test.go:212: connections=1 cold_bidirectional_delivery=5.269496ms
+    scaling_test.go:226: connections=1 shutdown=193.178µs
+=== RUN   TestTransportConnectionScale/32
+    scaling_test.go:212: connections=32 cold_bidirectional_delivery=15.455625ms
+    scaling_test.go:226: connections=32 shutdown=629.142µs
+=== RUN   TestTransportConnectionScale/128
+    scaling_test.go:212: connections=128 cold_bidirectional_delivery=34.268646ms
+    scaling_test.go:226: connections=128 shutdown=1.608845ms
+--- PASS: TestTransportConnectionScale (0.15s)
+    --- PASS: TestTransportConnectionScale/1 (0.01s)
+    --- PASS: TestTransportConnectionScale/32 (0.02s)
+    --- PASS: TestTransportConnectionScale/128 (0.11s)
+PASS
+ok  	github.com/RC-CHN/wg-quic/internal/bind	0.160s

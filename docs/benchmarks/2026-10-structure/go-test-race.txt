@@ -1,0 +1,40 @@
+ok  	github.com/RC-CHN/wg-quic/cmd/wg-quic	1.016s
+ok  	github.com/RC-CHN/wg-quic/cmd/wg-quic-quick	1.015s
+ok  	github.com/RC-CHN/wg-quic/internal/app	1.018s
+ok  	github.com/RC-CHN/wg-quic/internal/bind	60.243s
+ok  	github.com/RC-CHN/wg-quic/internal/config	2.062s
+ok  	github.com/RC-CHN/wg-quic/internal/control	1.024s
+ok  	github.com/RC-CHN/wg-quic/internal/core	1.181s
+?   	github.com/RC-CHN/wg-quic/internal/devicehost	[no test files]
+ok  	github.com/RC-CHN/wg-quic/internal/endpoint	1.116s
+ok  	github.com/RC-CHN/wg-quic/internal/management	1.033s
+ok  	github.com/RC-CHN/wg-quic/internal/observe	1.064s
+ok  	github.com/RC-CHN/wg-quic/internal/peerendpoint	1.017s
+ok  	github.com/RC-CHN/wg-quic/internal/platform	1.043s
+ok  	github.com/RC-CHN/wg-quic/internal/platformenv	1.016s
+ok  	github.com/RC-CHN/wg-quic/internal/quick	1.306s
+ok  	github.com/RC-CHN/wg-quic/internal/reconcile	1.046s
+?   	github.com/RC-CHN/wg-quic/internal/telemetry	[no test files]
+ok  	github.com/RC-CHN/wg-quic/internal/transport/fec	21.013s
+ok  	github.com/RC-CHN/wg-quic/internal/transport/obfs	1.072s
+ok  	github.com/RC-CHN/wg-quic/internal/transport/quic	1.058s
+ok  	github.com/RC-CHN/wg-quic/internal/wgdevice	1.016s
+?   	github.com/RC-CHN/wg-quic/tests/benchmark	[no test files]
+?   	github.com/RC-CHN/wg-quic/tests/network/dns-probe	[no test files]
+?   	github.com/RC-CHN/wg-quic/tests/network/soak-probe	[no test files]
+ok  	github.com/RC-CHN/wg-quic/tests/protocol	1.016s
+?   	github.com/RC-CHN/wg-quic/tests/proton/interop	[no test files]
+ok  	github.com/RC-CHN/wg-quic/tests/proton/prepare-overlay	1.015s
+ok  	github.com/RC-CHN/wg-quic/third_party/wireguard-go	1.144s
+ok  	github.com/RC-CHN/wg-quic/third_party/wireguard-go/conn	1.018s
+?   	github.com/RC-CHN/wg-quic/third_party/wireguard-go/conn/bindtest	[no test files]
+ok  	github.com/RC-CHN/wg-quic/third_party/wireguard-go/device	8.167s
+?   	github.com/RC-CHN/wg-quic/third_party/wireguard-go/ipc	[no test files]
+ok  	github.com/RC-CHN/wg-quic/third_party/wireguard-go/ratelimiter	1.016s
+ok  	github.com/RC-CHN/wg-quic/third_party/wireguard-go/replay	1.017s
+?   	github.com/RC-CHN/wg-quic/third_party/wireguard-go/rwcancel	[no test files]
+ok  	github.com/RC-CHN/wg-quic/third_party/wireguard-go/tai64n	1.015s
+ok  	github.com/RC-CHN/wg-quic/third_party/wireguard-go/tun	6.684s
+?   	github.com/RC-CHN/wg-quic/third_party/wireguard-go/tun/netstack	[no test files]
+?   	github.com/RC-CHN/wg-quic/third_party/wireguard-go/tun/tuntest	[no test files]
+ok  	github.com/RC-CHN/wg-quic/wg-quic-opnsense/scripts/qemu/linux-client	1.019s
