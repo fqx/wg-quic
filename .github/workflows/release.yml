@@ -56,7 +56,8 @@ jobs:
         run: go test -count=1 ./...
       - run: go test -count=1 ./...
       - run: go test -race ./...
-      - run: shellcheck scripts/*.sh tests/container/*.sh tests/benchmark/*.sh tests/linux/*.sh tests/linux/fixtures/* tests/proton/*.sh tests/openwrt/*.sh packaging/openwrt/*.sh packaging/freebsd/wg_quic packaging/openrc/wg-quic
+      - run: shellcheck scripts/*.sh tests/container/*.sh tests/benchmark/*.sh tests/network/*.sh tests/linux/*.sh tests/linux/fixtures/* tests/proton/*.sh tests/openwrt/*.sh packaging/openwrt/*.sh packaging/freebsd/wg_quic packaging/openrc/wg-quic
+      - run: python3 -m unittest discover -s tests/network -p 'test_*.py'
 
   verify-container:
     name: Release Linux tunnel interoperability
@@ -69,6 +70,14 @@ jobs:
       - run: sudo modprobe tun
       - run: ./tests/linux/openrc-smoke.sh
       - run: ./tests/container/test.sh
+      - name: Checked traffic through repeated outages and capacity changes
+        run: ./tests/network/recovery.sh
+      - name: Preserve recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-recovery-release
+          path: tests/benchmark/results/recovery-*
 
   verify-windows:
     runs-on: windows-2025

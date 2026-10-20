@@ -20,11 +20,12 @@ import (
 )
 
 type behaviorPeer struct {
-	bind *Bind
-	tun  *tuntest.ChannelTUN
-	dev  *device.Device
-	ipv4 netip.Addr
-	ipv6 netip.Addr
+	bind      *Bind
+	tun       *tuntest.ChannelTUN
+	dev       *device.Device
+	ipv4      netip.Addr
+	ipv6      netip.Addr
+	publicKey string
 }
 
 func TestWireGuardUpperLayerPacketsOverArmorBind(t *testing.T) {
@@ -276,6 +277,12 @@ func newBehaviorPair(
 	wireGuardPSKs [2][32]byte,
 	obfsPSK []byte,
 ) [2]*behaviorPeer {
+	return newBehaviorPairWithConfig(t, wireGuardPSKs, obfsPSK, DefaultConfig(), true)
+}
+
+func newBehaviorPairWithConfig(
+	t *testing.T, wireGuardPSKs [2][32]byte, obfsPSK []byte, config Config, connect bool,
+) [2]*behaviorPeer {
 	t.Helper()
 	var privateKeys [2][32]byte
 	var publicKeys [2][]byte
@@ -289,8 +296,9 @@ func newBehaviorPair(
 		}
 		publicKeys[i] = publicKey
 		peers[i] = &behaviorPeer{
-			tun:  tuntest.NewChannelTUN(),
-			ipv4: netip.AddrFrom4([4]byte{10, 55, 0, byte(i + 1)}),
+			publicKey: hex.EncodeToString(publicKey),
+			tun:       tuntest.NewChannelTUN(),
+			ipv4:      netip.AddrFrom4([4]byte{10, 55, 0, byte(i + 1)}),
 			ipv6: netip.AddrFrom16([16]byte{
 				0xfd, 0x00, 0, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, byte(i + 1),
@@ -307,7 +315,7 @@ func newBehaviorPair(
 		if err != nil {
 			t.Fatal(err)
 		}
-		bindConfig := DefaultConfig()
+		bindConfig := config
 		bindConfig.ObfsMode = "salamander"
 		bindConfig.ObfsKeys = []obfs.Key{obfsKey}
 		peer.bind = New(bindConfig)
@@ -315,7 +323,12 @@ func newBehaviorPair(
 			peer.tun.TUN(),
 			peer.bind,
 			device.NewLogger(device.LogLevelError, fmt.Sprintf("wgq-behavior-%d: ", i)),
-			device.Options{DisableTUNEventStateTransitions: true},
+			device.Options{
+				DisableTUNEventStateTransitions: true,
+				AuthenticatedReceive: func(event device.AuthenticatedReceive) {
+					peer.bind.AssociateSessionPeer(event.SessionID, hex.EncodeToString(event.PublicKey[:]), 1)
+				},
+			},
 		)
 		t.Cleanup(peer.dev.Close)
 
@@ -335,6 +348,9 @@ func newBehaviorPair(
 		}
 	}
 	for i, peer := range peers {
+		if !connect {
+			break
+		}
 		cfg := fmt.Sprintf(
 			"public_key=%s\nendpoint=127.0.0.1:%d\n",
 			hex.EncodeToString(publicKeys[i^1]),

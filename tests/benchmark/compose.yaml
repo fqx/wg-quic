@@ -21,7 +21,7 @@ services:
       QUIC_GO_DISABLE_GSO: "${WGQ_BENCH_DISABLE_OFFLOADS:-0}"
     networks:
       outer:
-        ipv4_address: 172.30.0.2
+        ipv4_address: ${WGQ_BENCH_OUTER_A:-172.30.0.2}
 
   b:
     image: wg-quic-bench:local
@@ -44,11 +44,11 @@ services:
       QUIC_GO_DISABLE_GSO: "${WGQ_BENCH_DISABLE_OFFLOADS:-0}"
     networks:
       outer:
-        ipv4_address: 172.30.0.3
+        ipv4_address: ${WGQ_BENCH_OUTER_B:-172.30.0.3}
 
 networks:
   outer:
     enable_ipv6: false
     ipam:
       config:
-        - subnet: 172.30.0.0/24
+        - subnet: ${WGQ_BENCH_SUBNET:-172.30.0.0/24}

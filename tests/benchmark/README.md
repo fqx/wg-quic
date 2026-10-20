@@ -119,6 +119,31 @@ These values have interval resolution; the legacy `first_delivery_s` field is
 an upper bound on the first client-observed write interval, not a packet-level
 latency measurement.
 
+For a correctness gate across multiple failures in one tunnel lifetime, run
+`make test-recovery`. This uses the production timeout policy and real TUN,
+limits each endpoint to one CPU and 512 MiB by default, and checks every byte
+of bidirectional traffic for 180 seconds. Its report requires new verified
+delivery in **every** clean interval after burst loss, a 20-second forward
+blackhole, a 20-second reverse blackhole, a capacity drop, and a 20-second
+bidirectional outage. Application sockets may reconnect; the tunnel is not
+restarted. Raw traffic, fault timestamps, qdisc counters before replacement,
+status samples and binary hashes are retained. `COMPLETE` is created only after
+the per-interval analysis passes. This is finite recovery evidence, not a
+multi-day leak or uptime guarantee.
+
+`make test-robustness` runs the portable Go fault and connection tests on Linux
+and FreeBSD without root or a kernel TUN. A UDP proxy injects faults before the
+first handshake; tests use real WireGuard and QUIC with an in-memory TUN.
+Extended fault tests honor `go test -short`. The opaque-datagram connection
+scale test also runs on Windows; it measures transport connections, not
+authenticated WireGuard peer capacity.
+
+For parallel or shared-host fixture runs, choose independent
+`COMPOSE_PROJECT_NAME`, `WGQ_BENCH_CONFIG_DIR`, `WGQ_BENCH_SUBNET`,
+`WGQ_BENCH_OUTER_A` and `WGQ_BENCH_OUTER_B`. `test-recovery` automatically
+keeps its generated configuration inside its result directory. It uses
+`172.40.0.0/24` by default; override all three address variables if occupied.
+
 `events.csv` puts fixture lifecycle events and controller samples on the same
 monotonic trial-relative timeline. For occasional TCP diagnosis, set
 `TCP_TELEMETRY_INTERVAL_SECONDS=0.5` to capture sender and receiver `ss -tin`
@@ -226,6 +251,7 @@ Available matrices:
 ./tests/benchmark/run.sh matrix profiles
 ./tests/benchmark/run.sh matrix bandwidth
 ./tests/benchmark/run.sh matrix protocol
+./tests/benchmark/run.sh matrix robustness
 ```
 
 - `transports` is the shortest apples-to-apples zero-loss TCP comparison: raw
@@ -237,6 +263,12 @@ Available matrices:
   random loss. Override `OFFERED_MBIT` after a bandwidth sweep.
 - `profiles` runs all five modes with TCP capacity traffic and a low-load
   1 Mbit/s UDP probe across every synthetic link profile.
+- `robustness` adds reverse-path ACK starvation, burst loss, short/long and
+  one-way outages, flapping, and repeated 500→1→500 Mbit/s transitions. The
+  default duration is 35 seconds; keep it at least 30 seconds so the last
+  scheduled restoration has time to deliver data. Use `MODES=fec-obfs` for
+  the default deployment, and compare `MODES='nofec-obfs fec-obfs'` to isolate
+  FEC. An iperf average does not itself prove recovery after every outage.
 - `bandwidth` sweeps offered UDP load through outer and all five tunnel modes.
   Override its space-separated load points with
   `OFFERED_RATES='5 10 20 40 80'`; select its link with `LINK_PROFILE`.

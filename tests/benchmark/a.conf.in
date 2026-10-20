@@ -16,4 +16,4 @@ MTU = @MTU@
 PublicKey = IMmmkZOkcoM8nTU8QQPTEreFZj0CIjIGvkQRxrk6sjA=
 PresharedKey = MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM=
 AllowedIPs = 10.88.0.2/32
-Endpoint = 172.30.0.3:51820
+Endpoint = @OUTER_B@:51820

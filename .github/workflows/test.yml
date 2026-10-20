@@ -48,7 +48,8 @@ jobs:
       - name: Pinned WireGuard behavior over production ArmorBind
         run: go test -count=1 -run '^TestWireGuard' ./internal/bind
       - run: go test -race ./...
-      - run: shellcheck scripts/*.sh tests/container/*.sh tests/benchmark/*.sh tests/linux/*.sh tests/linux/fixtures/* tests/proton/*.sh tests/openwrt/*.sh packaging/openwrt/*.sh packaging/freebsd/wg_quic packaging/openrc/wg-quic
+      - run: shellcheck scripts/*.sh tests/container/*.sh tests/benchmark/*.sh tests/network/*.sh tests/linux/*.sh tests/linux/fixtures/* tests/proton/*.sh tests/openwrt/*.sh packaging/openwrt/*.sh packaging/freebsd/wg_quic packaging/openrc/wg-quic
+      - run: python3 -m unittest discover -s tests/network -p 'test_*.py'
       - run: make build-windows
       - name: Upload self-contained Windows test bundles
         uses: actions/upload-artifact@v7
@@ -116,7 +117,7 @@ jobs:
             ./scripts/check-no-reference-deps.sh
             go test ./...
             go test -count=1 -run '^TestWireGuard' ./internal/bind
-            go test -count=5 -timeout=5m ./internal/transport/quic ./internal/bind
+            go test -short -count=5 -timeout=5m ./internal/transport/quic ./internal/bind
             go test -race ./internal/...
             go build ./cmd/wg-quic
             go build ./cmd/wg-quic-quick
@@ -135,3 +136,11 @@ jobs:
       - run: sudo modprobe tun
       - run: ./tests/linux/openrc-smoke.sh
       - run: ./tests/container/test.sh
+      - name: Checked traffic through repeated outages and capacity changes
+        run: ./tests/network/recovery.sh
+      - name: Preserve recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-recovery
+          path: tests/benchmark/results/recovery-*

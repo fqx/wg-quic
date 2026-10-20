@@ -3,9 +3,10 @@ set -euo pipefail
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(CDPATH='' cd -- "$script_dir/../.." && pwd)
-generated_dir="$script_dir/.generated"
+generated_dir=${WGQ_BENCH_CONFIG_DIR:-"$script_dir/.generated"}
 results_root=${RESULTS_DIR:-"$script_dir/results"}
 project_name=${COMPOSE_PROJECT_NAME:-wg-quic-bench}
+outer_b=${WGQ_BENCH_OUTER_B:-172.30.0.3}
 compose=(docker compose -p "$project_name" -f "$script_dir/compose.yaml")
 benchmark_transport=wg-quic
 benchmark_mtu=1280
@@ -270,6 +271,18 @@ resolve_link_profile() {
 		link_loss_correlation=25
 		link_reorder_correlation=25
 		;;
+	blackhole | forward-blackhole | reverse-blackhole | slow)
+		# Start from one complete profile so scheduled transitions reset
+		# every field, including loss left over from an earlier outage.
+		resolve_link_profile fiber "$base_impairment" "$base_rate" "$base_delay" "$base_jitter" "$base_loss" "$base_queue"
+		link_profile=$profile
+		case "$profile" in
+		blackhole) link_fwd_loss=100; link_rev_loss=100 ;;
+		forward-blackhole) link_fwd_loss=100 ;;
+		reverse-blackhole) link_rev_loss=100 ;;
+		slow) link_fwd_rate=1; link_rev_rate=1; link_queue_packets=32 ;;
+		esac
+		;;
 	*)
 		echo "unsupported LINK_PROFILE $profile" >&2
 		return 1
@@ -294,6 +307,7 @@ render_configs() {
 		-e "s/@FEC_DATA_SHARDS@/$data_shards/g" \
 		-e "s/@FEC_INTERLEAVE@/$interleave/g" \
 		-e "s/@MTU@/$mtu/g" \
+		-e "s/@OUTER_B@/$outer_b/g" \
 		"$script_dir/a.conf.in" >"$generated_dir/a.conf"
 	sed \
 		-e "s/@FEC@/$fec/g" \
@@ -303,7 +317,7 @@ render_configs() {
 		-e "s/@FEC_INTERLEAVE@/$interleave/g" \
 		-e "s/@MTU@/$mtu/g" \
 		"$script_dir/b.conf.in" >"$generated_dir/b.conf"
-	cp "$script_dir/a.uapi.in" "$generated_dir/a.uapi"
+	sed -e "s/@OUTER_B@/$outer_b/g" "$script_dir/a.uapi.in" >"$generated_dir/a.uapi"
 	cp "$script_dir/b.uapi.in" "$generated_dir/b.uapi"
 }
 
@@ -861,6 +875,7 @@ run_trial() {
 		if [[ $link_fwd_loss != 0 || $link_rev_loss != 0 ||
 			$link_fwd_duplicate != 0 || $link_rev_duplicate != 0 ||
 			$link_fwd_reorder != 0 || $link_rev_reorder != 0 ||
+			-n ${LINK_SCHEDULE:-} ||
 			$benchmark_protocol_policy != none ]]; then
 			benchmark_disable_offloads=1
 		fi
@@ -982,8 +997,8 @@ run_trial() {
 	if [[ ${MEASURE_OUTER:-1} == 1 && $workload != outer-* ]]; then
 		local outer_duration=${OUTER_MEASURE_DURATION:-3}
 		validate_integer OUTER_MEASURE_DURATION "$outer_duration"
-		start_iperf_server 172.30.0.3 5200
-		local outer_iperf_args=(-c 172.30.0.3 -p 5200 -t "$outer_duration" -P 1 --json --get-server-output)
+		start_iperf_server "$outer_b" 5200
+		local outer_iperf_args=(-c "$outer_b" -p 5200 -t "$outer_duration" -P 1 --json --get-server-output)
 		if [[ $workload == udp ]]; then
 			outer_iperf_args+=(-u -b "${offered_mbit}M" -l 1200)
 		fi
@@ -1015,7 +1030,7 @@ run_trial() {
 
 	local destination=10.88.0.2
 	if [[ $workload == outer-* ]]; then
-		destination=172.30.0.3
+		destination=$outer_b
 	fi
 	local port=5201
 	start_iperf_server "$destination" "$port"
@@ -1331,6 +1346,35 @@ run_matrix() {
 			done
 		done
 		;;
+	robustness)
+		# Static loss matrices miss recovery through connection idle expiry,
+		# asymmetric ACK starvation and repeated capacity transitions.
+		validate_integer DURATION "${DURATION:-35}"
+		if [ "${DURATION:-35}" -lt 30 ]; then
+			echo "robustness requires DURATION >= 30 to observe the final restoration" >&2
+			return 1
+		fi
+		for repeat in $(seq 1 "${REPEATS:-1}"); do
+			for mode in "${selected_modes[@]}"; do
+				CURRENT_LINK_PROFILE=custom
+				REV_LOSS_PCT=20 REV_RATE_MBIT=1 \
+					run_trial "$mode" tcp "$repeat" symmetric 50 20 5 0 64 1280 "${DURATION:-35}" 1 0
+				LOSS_MODEL=burst BURST_LEN=8 \
+					run_trial "$mode" tcp "$repeat" symmetric 50 20 5 5 64 1280 "${DURATION:-35}" 1 0
+				CURRENT_LINK_PROFILE=fiber
+				for schedule in \
+					'3:blackhole,5:fiber' \
+					'3:blackhole,23:fiber' \
+					'3:forward-blackhole,23:fiber' \
+					'3:reverse-blackhole,23:fiber' \
+					'3:slow,10:fiber,15:slow,22:fiber' \
+					'3:blackhole,5:fiber,8:blackhole,10:fiber,13:blackhole,15:fiber'; do
+					LINK_SCHEDULE="$schedule" \
+						run_trial "$mode" tcp "$repeat" symmetric 0 0 0 0 1000 1280 "${DURATION:-35}" 1 0
+				done
+			done
+		done
+		;;
 	protocol)
 		CURRENT_LINK_PROFILE=lan
 		local policy
@@ -1347,7 +1391,7 @@ run_matrix() {
 		done
 		;;
 	*)
-		echo "matrix must be transports, quick, ceiling, loss, profiles, bandwidth, or protocol" >&2
+		echo "matrix must be transports, quick, ceiling, loss, profiles, bandwidth, robustness, or protocol" >&2
 		return 1
 		;;
 	esac
@@ -1359,13 +1403,13 @@ Usage:
   tests/benchmark/run.sh prepare
   tests/benchmark/run.sh trial
   tests/benchmark/run.sh smoke
-  tests/benchmark/run.sh matrix transports|quick|ceiling|loss|profiles|bandwidth|protocol
+  tests/benchmark/run.sh matrix transports|quick|ceiling|loss|profiles|bandwidth|robustness|protocol
   tests/benchmark/run.sh down
 
 The trial command is configured with environment variables. Common values:
   MODE=direct-wireguard-go|nofec-plain|nofec-obfs|fec-plain|fec-obfs
   WORKLOAD=tcp|udp|outer-tcp|outer-udp
-  LINK_PROFILE=custom|unshaped|lan|fiber|cable|dsl|wifi|cellular|satellite|lossy-wifi
+  LINK_PROFILE=custom|unshaped|lan|fiber|cable|dsl|wifi|cellular|satellite|lossy-wifi|blackhole|forward-blackhole|reverse-blackhole|slow
   IMPAIRMENT=none|forward|reverse|symmetric
   RATE_MBIT=0 LOSS_PCT=0 ONE_WAY_DELAY_MS=0 JITTER_MS=0
   FWD_RATE_MBIT=0 REV_RATE_MBIT=0 FWD_LOSS_PCT=0 REV_LOSS_PCT=0
@@ -1381,6 +1425,7 @@ The trial command is configured with environment variables. Common values:
   WGQ_BENCH_CPUS=1 WGQ_BENCH_MEMORY=512m
   WGQ_BENCH_CPUSET_A=2 WGQ_BENCH_CPUSET_B=3
   WGQ_BENCH_GOMAXPROCS=1 WGQ_BENCH_GOMEMLIMIT=192MiB
+  WGQ_BENCH_SUBNET=172.30.0.0/24 WGQ_BENCH_OUTER_A=172.30.0.2 WGQ_BENCH_OUTER_B=172.30.0.3
 EOF
 }
 

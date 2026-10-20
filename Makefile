@@ -82,6 +82,16 @@ benchmark-bandwidth:
 benchmark-protocol:
 	./tests/benchmark/run.sh matrix protocol
 
+.PHONY: test-robustness test-recovery benchmark-robustness
+test-robustness:
+	go test -timeout=5m -count=1 -v ./internal/bind -run 'Test(WireGuard(Impaired|Outage|InitiallyOffline)|TransportConnectionScale|ReconnectResumesAfterAdmissionPressure|SessionEventHistory)'
+
+benchmark-robustness:
+	./tests/benchmark/run.sh matrix robustness
+
+test-recovery:
+	./tests/network/recovery.sh
+
 .PHONY: test-protocol-interop
 test-protocol-interop:
 	cargo fmt --manifest-path tests/protocol/rust-interop/Cargo.toml --check
