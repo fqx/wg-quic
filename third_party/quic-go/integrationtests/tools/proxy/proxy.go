@@ -153,6 +153,11 @@ type Proxy struct {
 	// ServerAddr is the address of the server that the proxy forwards packets to.
 	ServerAddr *net.UDPAddr
 
+	// SocketBufferSize overrides the requested UDP read and write buffer sizes.
+	// Zero uses the QUIC defaults. Small correctness fixtures can request less
+	// on systems whose kernel socket limit is below the QUIC defaults.
+	SocketBufferSize int
+
 	// DropPacket is a callback that determines which packet gets dropped.
 	DropPacket DropCallback
 
@@ -172,10 +177,7 @@ func (p *Proxy) Start() error {
 	p.closeChan = make(chan struct{})
 	p.logger = utils.DefaultLogger.WithPrefix("proxy")
 
-	if err := p.Conn.SetReadBuffer(protocol.DesiredReceiveBufferSize); err != nil {
-		return err
-	}
-	if err := p.Conn.SetWriteBuffer(protocol.DesiredSendBufferSize); err != nil {
+	if err := p.setSocketBuffers(p.Conn); err != nil {
 		return err
 	}
 
@@ -184,13 +186,21 @@ func (p *Proxy) Start() error {
 	return nil
 }
 
+func (p *Proxy) setSocketBuffers(conn *net.UDPConn) error {
+	readSize, writeSize := protocol.DesiredReceiveBufferSize, protocol.DesiredSendBufferSize
+	if p.SocketBufferSize > 0 {
+		readSize, writeSize = p.SocketBufferSize, p.SocketBufferSize
+	}
+	if err := conn.SetReadBuffer(readSize); err != nil {
+		return err
+	}
+	return conn.SetWriteBuffer(writeSize)
+}
+
 // SwitchConn switches the connection for a client,
 // identified the address that the client is sending from.
 func (p *Proxy) SwitchConn(clientAddr *net.UDPAddr, conn *net.UDPConn) error {
-	if err := conn.SetReadBuffer(protocol.DesiredReceiveBufferSize); err != nil {
-		return err
-	}
-	if err := conn.SetWriteBuffer(protocol.DesiredSendBufferSize); err != nil {
+	if err := p.setSocketBuffers(conn); err != nil {
 		return err
 	}
 	p.mutex.Lock()
@@ -227,10 +237,8 @@ func (p *Proxy) newConnection(cliAddr *net.UDPAddr) (*connection, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := conn.SetReadBuffer(protocol.DesiredReceiveBufferSize); err != nil {
-		return nil, err
-	}
-	if err := conn.SetWriteBuffer(protocol.DesiredSendBufferSize); err != nil {
+	if err := p.setSocketBuffers(conn); err != nil {
+		conn.Close()
 		return nil, err
 	}
 	return &connection{

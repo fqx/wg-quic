@@ -155,6 +155,9 @@ func TestReconnectConfigurationBounds(t *testing.T) {
 func TestTransportConnectionScale(t *testing.T) {
 	for _, count := range []int{1, 32, 128} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			var workers sync.WaitGroup
+			// Registered first so socket cleanup unblocks receivers before waiting.
+			t.Cleanup(workers.Wait)
 			cfg := DefaultConfig()
 			cfg.MaxPendingInboundSessions = count
 			server := New(cfg)
@@ -179,29 +182,32 @@ func TestTransportConnectionScale(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			done := make(chan error, count+1)
-			go func() {
+			type result struct {
+				client int
+				err    error
+			}
+			done := make(chan result, count+1)
+			workers.Go(func() {
 				buf := make([]byte, 2048)
 				sizes := make([]int, 1)
 				eps := make([]conn.Endpoint, 1)
-				for range count {
+				for {
 					if _, err := receive[0]([][]byte{buf}, sizes, eps); err != nil {
-						done <- err
+						done <- result{-1, err}
 						return
 					}
 					if err := server.Send([][]byte{buf[:sizes[0]]}, eps[0]); err != nil {
-						done <- err
+						done <- result{-1, err}
 						return
 					}
 				}
-				done <- nil
-			}()
+			})
 			start := time.Now()
 			for i, client := range clients {
-				go func() {
+				workers.Go(func() {
 					payload := []byte(fmt.Sprintf("connection-%d", i))
 					if err := client.Send([][]byte{payload}, endpoints[i]); err != nil {
-						done <- err
+						done <- result{i, err}
 						return
 					}
 					buf := make([]byte, 2048)
@@ -210,19 +216,37 @@ func TestTransportConnectionScale(t *testing.T) {
 					if err == nil && !bytes.Equal(buf[:sizes[0]], payload) {
 						err = fmt.Errorf("connection %d received the wrong payload", i)
 					}
-					done <- err
-				}()
+					done <- result{i, err}
+				})
 			}
 			deadline := time.NewTimer(8 * time.Second)
 			defer deadline.Stop()
-			for range count + 1 {
+			retry := time.NewTicker(100 * time.Millisecond)
+			defer retry.Stop()
+			completed := make([]bool, count)
+			for remaining := count; remaining > 0; {
 				select {
-				case err := <-done:
-					if err != nil {
-						t.Fatal(err)
+				case result := <-done:
+					if result.err != nil {
+						t.Fatal(result.err)
+					}
+					completed[result.client] = true
+					remaining--
+				case <-retry.C:
+					// QUIC DATAGRAM is unreliable, including on overloaded
+					// loopback sockets. Retry unanswered probes while still
+					// requiring a checked reply from every distinct client.
+					for i, client := range clients {
+						if completed[i] {
+							continue
+						}
+						payload := []byte(fmt.Sprintf("connection-%d", i))
+						if err := client.Send([][]byte{payload}, endpoints[i]); err != nil {
+							t.Fatal(err)
+						}
 					}
 				case <-deadline.C:
-					t.Fatal("concurrent cold connections did not deliver within the deadline")
+					t.Fatalf("%d/%d connections have no checked reply; server=%+v", remaining, count, server.Stats())
 				}
 			}
 			t.Logf("connections=%d cold_bidirectional_delivery=%s", count, time.Since(start))
@@ -236,6 +260,7 @@ func TestTransportConnectionScale(t *testing.T) {
 			}
 			wg.Wait()
 			server.Close()
+			workers.Wait()
 			if server.stats.activeSessions.Load() != 0 {
 				t.Fatal("server leaked sessions")
 			}

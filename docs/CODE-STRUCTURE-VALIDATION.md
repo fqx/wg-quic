@@ -153,6 +153,18 @@ The Linux CI container job now runs checked recovery and uploads its evidence.
 Separate result/config directories and configurable outer subnets allow
 fixtures to avoid collisions with existing Docker networks.
 
+Native release CI exposed two assumptions in the initial test fixtures.
+The connection-scale gate now retries unanswered datagrams and still requires
+an exact reply from every distinct connection; a single dropped QUIC DATAGRAM
+must not be interpreted as a failed connection. The low-rate fault proxy
+requests 32 KiB UDP buffers so it also works within unprivileged FreeBSD socket
+limits. Production socket sizes and admission limits are unchanged. The
+loopback timings above are the original retained Linux samples.
+The integrity gate also collects a longer sample and requires at least 32
+checked packets from each address family. It does not impose an arbitrary
+delivery percentage on QUIC DATAGRAM under reverse ACK starvation; throughput
+and queue drops remain separate measured results.
+
 These finite runs do not establish multi-day leak freedom or a maximum
 supported peer count. Asymmetric outages can still take several seconds to
 recover under production timers. A peer coming online after an initial

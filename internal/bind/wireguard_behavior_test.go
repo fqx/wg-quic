@@ -395,6 +395,8 @@ func testIPv6Packet(src, dst netip.Addr, payloadSize int, tag uint16) []byte {
 	const headerSize = 40
 	packet := make([]byte, headerSize+payloadSize)
 	packet[0] = 0x60
+	// Preserve the full tag in the flow label; the payload pattern wraps at 256.
+	binary.BigEndian.PutUint16(packet[2:4], tag)
 	binary.BigEndian.PutUint16(packet[4:6], uint16(payloadSize))
 	packet[6] = 59
 	packet[7] = 64

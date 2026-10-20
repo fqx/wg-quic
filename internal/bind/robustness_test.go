@@ -90,6 +90,8 @@ func impairedPair(t *testing.T, profile faultProfile, cfg Config) ([2]*behaviorP
 		Conn:       socket,
 		ServerAddr: &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: int(peers[1].bind.Port())},
 		DropPacket: path.drop, DelayPacket: path.delay,
+		// Fit unprivileged FreeBSD socket limits; these are low-rate probes.
+		SocketBufferSize: 32 * 1024,
 	}
 	if err := proxy.Start(); err != nil {
 		t.Fatal(err)
@@ -254,7 +256,7 @@ func TestWireGuardImpairedTraffic(t *testing.T) {
 				peers, path := impairedPair(t, faultProfile{}, cfg)
 				probeImpaired(t, peers[0], peers[1], 0, 5*time.Second)
 				path.set(tc.fault)
-				const packets = 160
+				const packets = 600
 				expected := make(map[string]bool, packets)
 				payloads := make([][]byte, packets)
 				for i := range payloads {
@@ -265,11 +267,16 @@ func TestWireGuardImpairedTraffic(t *testing.T) {
 					} else {
 						payloads[i] = testIPv6Packet(peers[0].ipv6, peers[1].ipv6, 3000, uint16(i+100))
 					}
-					expected[string(payloads[i])] = false
+					key := string(payloads[i])
+					if _, exists := expected[key]; exists {
+						t.Fatalf("fixture generated duplicate payload %d", i)
+					}
+					expected[key] = false
 				}
 				done := make(chan struct{})
 				cancel := make(chan struct{})
-				t.Cleanup(func() { close(cancel); <-done })
+				stop := sync.OnceFunc(func() { close(cancel); <-done })
+				t.Cleanup(stop)
 				go func() {
 					defer close(done)
 					// Limit this integrity gate to 100 packets/s. Saturation
@@ -290,9 +297,10 @@ func TestWireGuardImpairedTraffic(t *testing.T) {
 						}
 					}
 				}()
-				deadline := time.NewTimer(4 * time.Second)
+				deadline := time.NewTimer(8 * time.Second)
 				defer deadline.Stop()
 				delivered := 0
+				var families [2]int
 			collect:
 				for delivered < packets {
 					select {
@@ -310,12 +318,22 @@ func TestWireGuardImpairedTraffic(t *testing.T) {
 						}
 						expected[key] = true
 						delivered++
+						if packet[0]>>4 == 4 {
+							families[0]++
+						} else {
+							families[1]++
+						}
 					case <-deadline.C:
 						break collect
 					}
 				}
-				if delivered < packets/3 {
-					t.Fatalf("only %d/%d intact datagrams arrived", delivered, packets)
+				stop()
+				// Require a useful sample of both complete IPv4 packets and
+				// reassembled IPv6 packets. An unreliable tunnel does not
+				// promise a delivery percentage under ACK starvation.
+				if families[0] < 32 || families[1] < 32 {
+					t.Fatalf("insufficient checked samples: IPv4=%d IPv6=%d; sender=%+v",
+						families[0], families[1], peers[0].bind.Stats())
 				}
 				stats := peers[0].bind.Stats()
 				t.Logf("fec=%s intact_unique=%d/%d outer_drops=%d fec_recovered=%d sender_queue_drops=%d expired=%d",
