@@ -23,6 +23,8 @@ Existing configuration, wire formats and default timeout policies are unchanged.
   release CI.
 - Preserve reproducible before/after measurements, raw fault-test results and
   validation limits in `docs/CODE-STRUCTURE-VALIDATION.md`.
+- Update the desktop build dependency `source-map-js` to 1.2.2 to address
+  GHSA-68fv-2mgg-jv7q.
 
 ## v0.4.3 - 2026-10-04
 
