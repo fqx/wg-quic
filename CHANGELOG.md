@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## v0.4.4 - 2026-10-20
+
+Simplify transport ownership and improve recovery under connection pressure.
+Existing configuration, wire formats and default timeout policies are unchanged.
+
+- Separate bind configuration, session lifetime, send/receive workers, reconnect
+  policy and diagnostics into focused files within the existing package.
+- Keep automatic retries active when the session limit prevents a reconnect,
+  so releasing capacity restores connectivity without new application traffic.
+  Release completed retry contexts and normalize reconnect backoff bounds.
+- Retain connection events in a bounded ring with constant-time append while
+  preserving chronological pagination, sequence numbers and dropped counts.
+  The full-history append microbenchmark improves from 9.7 µs to 36 ns; tunnel
+  throughput measurements do not establish a corresponding speedup.
+- Cover impaired cold starts, asymmetric and repeated outages, packet integrity
+  under loss/reordering, and 1/32/128 concurrent QUIC transport connections.
+  Add a 180-second real-TUN recovery gate with checked bidirectional bytes,
+  production timeouts, one CPU and bounded endpoint memory to regular and
+  release CI.
+- Preserve reproducible before/after measurements, raw fault-test results and
+  validation limits in `docs/CODE-STRUCTURE-VALIDATION.md`.
+
 ## v0.4.3 - 2026-10-04
 
 Reduce latency under load and recover from sudden path-capacity changes with
