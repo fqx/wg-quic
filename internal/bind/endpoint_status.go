@@ -1,6 +1,8 @@
 package armorbind
 
-import "net/netip"
+import (
+	"net/netip"
+)
 
 type EndpointObservation struct {
 	Session   EndpointSessionState
@@ -143,3 +145,19 @@ func (b *Bind) EndpointReconnectStatus(endpoint netip.AddrPort) EndpointReconnec
 	}
 	return result
 }
+
+type EndpointSessionState string
+
+type EndpointReconnectStatus struct {
+	Attempts            uint64
+	Failures            uint64
+	ConsecutiveFailures uint32
+	NextReconnect       int64
+}
+
+const (
+	EndpointSessionIdle         EndpointSessionState = "idle"
+	EndpointSessionDialing      EndpointSessionState = "dialing"
+	EndpointSessionReconnecting EndpointSessionState = "reconnecting"
+	EndpointSessionEstablished  EndpointSessionState = "established"
+)
