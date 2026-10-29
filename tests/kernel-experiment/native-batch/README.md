@@ -72,3 +72,25 @@ finally cleanup. The matrix interrupted for maintenance is historical pre-data,
 not part of the new post-maintenance formal set. After final verification stop
 monitors, remove temporary test processes/netns/keys and normally power off only
 the dedicated test VM. Do not delete its source, disk or results.
+
+## Final evidence collection
+
+The 36 formal trials are followed by the planned 1424-byte burst confirmation.
+A true negative 1200-byte burst sample was retained and independently confirmed
+with one additional fixed-configuration B/C/A set of 180-second runs:
+python3 additional_confirmation.py
+
+Only after all CPU measurements finish, run four separate intrusive syscall checks:
+python3 run_syscall_proofs.py
+python3 analyze_syscalls.py
+
+The analyzer verifies local connected-UDP FDs by inode and includes EAGAIN probes.
+Instrumented tracing can increase batching and cause delivery loss; those runs
+prove actual syscall use and are excluded from CPU comparisons. Normal batch
+coverage comes from untraced formal relay counters.
+
+The final host analysis also checks per-vCPU Run for sustained saturation, ready,
+CoStop and swap. Analysis errors are preserved explicitly rather than silently
+omitting trials. Raw source scripts and all negative samples remain in the
+experiment evidence archive. No kernel or Go implementation changes were made
+after the tested d570954 source commit.

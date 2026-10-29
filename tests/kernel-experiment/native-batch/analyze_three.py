@@ -9,6 +9,19 @@ args=parser.parse_args()
 phase=args.phase
 host=r/('host-metrics-batch-pre-maintenance.csv' if phase=='pre' else 'host-metrics-batch-post.csv')
 rows=m.host_rows(host)
+original_host_window=m.host_window
+def extended_host_window(rows,start,end,margin=2):
+ h=original_host_window(rows,start,end,margin)
+ selected=[rows[k] for k in range(1,len(rows)) if rows[k-1]['t']>=start+margin and rows[k]['t']<=end-margin]
+ runs=[v for x in selected for k,v in x['v'].items() if 'Vcpu(' in k and 'vmx-vcpu-' in k and 'wg-quic-ab-test' in k and k.rsplit(chr(92),1)[-1]=='% Run']
+ h['vcpu_run_max_pct']=max(runs)
+ h['interference_flags']=[]
+ if h['vcpu_ready_max_pct']>5:h['interference_flags'].append('ready_over_5_percent')
+ if h['costop_max_pct']>1:h['interference_flags'].append('costop_over_1_percent')
+ if h['vm_swapped_max_MB']>0 or h['vm_swap_write_max_MB_s']>0:h['interference_flags'].append('host_vm_swap')
+ if h['vcpu_run_max_pct']>=95:h['interference_flags'].append('vcpu_run_near_saturation')
+ return h
+m.host_window=extended_host_window
 trials=[];failures=[]
 for p in sorted((r/'results').glob('*/failure.txt')):failures.append(dict(trial=p.parent.name,error=p.read_text()))
 for p in sorted((r/'results').glob('*/summary.json')):
@@ -22,7 +35,7 @@ for p in sorted((r/'results').glob('*/summary.json')):
   vs=[m.host_window(rows,start,end,x)['used_pct']/100/rate for x in [1,2,3]]
   h['used_boundary_min']=min(vs);h['used_boundary_max']=max(vs)
   s['host']=h
- except Exception as e:s['host_error']=repr(e);continue
+ except Exception as e:failures.append(dict(trial=s['trial'],stage='analysis',error=repr(e)));continue
  s['endpoint_user_seconds']=sum(s['processes'][n]['user_seconds'] for n in ['a','b'])
  s['endpoint_system_seconds']=sum(s['processes'][n]['system_seconds'] for n in ['a','b'])
  s['endpoint_cpu_cost']=(s['endpoint_user_seconds']+s['endpoint_system_seconds'])/s['sample_seconds']/rate
