@@ -1,5 +1,7 @@
 # Kernel WireGuard + unchanged wg-quic carrier experiment
 
+For reuse in a hardware-virtualized Linux guest, see [Native VM handoff](NATIVE-VM.md).
+
 This is a cloud-only architecture prototype based on
 `c1c02231f5298d72458eb9c5bd944e57edccee34`. The ordinary `wg-quic` executable,
 Bind, QUIC DATAGRAM transport, WGQ1 fragmentation, automatic FEC, congestion
