@@ -34,6 +34,11 @@ func readLocalBatch(socket batchSocket, messages []ipv4.Message) (int, error) {
 		if n == 0 && errors.Is(err, syscall.EINTR) {
 			continue
 		}
+		// An unpack error can leave stale per-message N/Addr fields. Never expose
+		// a supposedly readable prefix unless the batch API completed successfully.
+		if n > 0 && err != nil {
+			return 0, err
+		}
 		if n == 0 && err == nil {
 			return 0, io.ErrNoProgress
 		}

@@ -2,7 +2,10 @@ package kernelrelay
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	armorbind "github.com/RC-CHN/wg-quic/internal/bind"
+	"github.com/RC-CHN/wg-quic/third_party/wireguard-go/conn"
 	"io"
 	"net"
 	"net/netip"
@@ -257,5 +260,171 @@ func BenchmarkEndpointAdmission(b *testing.B) {
 		if !r.acceptEndpoint(ep) {
 			b.Fatal("rejected")
 		}
+	}
+}
+
+type noStringEndpoint struct{ testEndpoint }
+
+func (e noStringEndpoint) DstToString() string { panic("hot path formatted address") }
+
+type legacySessionEndpoint struct{ conn.Endpoint }
+
+func (legacySessionEndpoint) SessionID() uint64 { return 1 }
+func TestNumericEndpointAdmissionPreservesExactPin(t *testing.T) {
+	address := netip.MustParseAddrPort("127.0.0.1:34567")
+	r := &Relay{cfg: Config{PeerQUICEndpoint: address}}
+	good := testEndpoint{address, 1}
+	if !r.acceptEndpoint(noStringEndpoint{good}) {
+		t.Fatal("numeric endpoint rejected")
+	}
+	if r.acceptEndpoint(legacySessionEndpoint{good}) {
+		t.Fatal("endpoint without exact numeric metadata accepted")
+	}
+	var nilEndpoint *armorbind.Endpoint
+	if r.acceptEndpoint(nilEndpoint) {
+		t.Fatal("nil endpoint accepted")
+	}
+	if r.acceptEndpoint(testEndpoint{netip.MustParseAddrPort("127.0.0.1:34568"), 1}) {
+		t.Fatal("changed port admitted")
+	}
+	if r.acceptEndpoint(testEndpoint{address, 2}) {
+		t.Fatal("replacement session admitted")
+	}
+}
+func TestKernelBatchAdmissionDoesNotConflateShapeAndAuthentication(t *testing.T) {
+	address := netip.MustParseAddrPort("127.0.0.1:34567")
+	r := &Relay{cfg: Config{PeerQUICEndpoint: address}}
+	packets := [][]byte{make([]byte, 32), make([]byte, 32), make([]byte, 32), make([]byte, 31)}
+	for _, p := range packets {
+		p[0] = 4
+	}
+	endpoints := []conn.Endpoint{testEndpoint{address, 1}, testEndpoint{address, 2}, testEndpoint{address, 1}, testEndpoint{address, 1}}
+	messages := make([]ipv4.Message, 4)
+	for i := range messages {
+		messages[i].Buffers = make([][]byte, 1)
+	}
+	n := r.prepareKernelBatch(packets, []int{32, 32, 32, 31}, endpoints, messages, 4)
+	if n != 2 || r.sessionID != 1 || !r.forwarded || r.authenticated || r.rejected.Load() != 1 || r.rejectedSessions.Load() != 1 {
+		t.Fatalf("admission changed: n=%d sid=%d rejected=%d sessions=%d", n, r.sessionID, r.rejected.Load(), r.rejectedSessions.Load())
+	}
+	if &messages[0].Buffers[0][0] != &packets[0][0] || &messages[1].Buffers[0][0] != &packets[2][0] {
+		t.Fatal("accepted batch changed order")
+	}
+	for _, m := range messages[:n] {
+		if m.Addr != nil {
+			t.Fatal("connected destination overridden")
+		}
+	}
+}
+func TestReadErrorCannotReplayStaleMessageMetadata(t *testing.T) {
+	s := &scriptedBatch{actions: []batchAction{{2, errors.New("address unpack failed"), false}}}
+	if n, err := readLocalBatch(s, testMessages()); n != 0 || err == nil {
+		t.Fatal("unpacked prefix exposed on error", n, err)
+	}
+}
+
+func TestRelayBurstBufferReuseAndBulkSend(t *testing.T) {
+	kernel := udpSocket(t)
+	remote := armorbind.New(armorbind.DefaultConfig())
+	recvs, port, err := remote.Open(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close()
+	key := [32]byte{7}
+	observer := &testObserver{value: PeerSnapshot{PublicKey: key, ListenPort: kernel.LocalAddr().(*net.UDPAddr).AddrPort().Port()}}
+	bind := armorbind.New(armorbind.DefaultConfig())
+	relay, err := Open(Config{Bind: bind, Observer: observer, PeerPublicKey: key, KernelEndpoint: kernel.LocalAddr().(*net.UDPAddr).AddrPort(), BootstrapListen: freeUDPAddress(t), PeerQUICEndpoint: netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), port)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer relay.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- relay.Run(ctx) }()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Error("workers did not stop")
+		}
+	}()
+	ep, err := remote.ParseEndpoint(netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), bind.Port()).String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := make([]byte, 32)
+	request[0] = 4
+	if err := remote.Send([][]byte{request}, ep); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 65536)
+	kernel.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, source, err := kernel.ReadFromUDPAddrPort(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const count = 48
+	received := make(chan error, 1)
+	go func() {
+		buffers := make([][]byte, 32)
+		sizes := make([]int, 32)
+		eps := make([]conn.Endpoint, 32)
+		for i := range buffers {
+			buffers[i] = make([]byte, 65535)
+		}
+		want := 0
+		for want < count {
+			n, err := recvs[0](buffers, sizes, eps)
+			if err != nil {
+				received <- err
+				return
+			}
+			for i := 0; i < n; i++ {
+				p := buffers[i][:sizes[i]]
+				expected := make([]byte, 64+want)
+				expected[0] = 4
+				for j := 4; j < len(expected); j++ {
+					expected[j] = byte(want + j)
+				}
+				if !bytes.Equal(p, expected) {
+					received <- errors.New("buffer reused before Bind copied packet")
+					return
+				}
+				want++
+			}
+		}
+		received <- nil
+	}()
+	for i := 0; i < count; i++ {
+		p := make([]byte, 64+i)
+		p[0] = 4
+		for j := 4; j < len(p); j++ {
+			p[j] = byte(i + j)
+		}
+		if _, err := kernel.WriteToUDPAddrPort(p, source); err != nil {
+			t.Fatal(err)
+		}
+	}
+	select {
+	case err := <-received:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("burst not delivered")
+	}
+	deadline := time.Now().Add(time.Second)
+	for relay.Stats().BindSendMessages < count && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	stats := relay.Stats()
+	if stats.BindSendMessages != count || stats.FromKernelPackets != count || stats.LocalReadMessages != count {
+		t.Fatal("batch accounting mismatch", stats.BindSendMessages, stats.FromKernelPackets, stats.LocalReadMessages)
+	}
+	if stats.Authenticated {
+		t.Fatal("local IO authenticated a fake peer")
 	}
 }

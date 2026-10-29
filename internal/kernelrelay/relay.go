@@ -251,36 +251,17 @@ func (r *Relay) receiveQUIC() error {
 	eps := make([]conn.Endpoint, len(packets))
 	for {
 		n, readErr := r.receive(packets, sizes, eps)
+		if readErr != nil {
+			return readErr
+		}
 		if n < 0 || n > len(packets) {
 			return errors.New("invalid Bind receive count")
 		}
-		count := 0
-		for i := 0; i < n; i++ {
-			if sizes[i] < 0 || sizes[i] > len(packets[i]) || !validDatagram(packets[i][:sizes[i]]) {
-				r.rejected.Add(1)
-				continue
-			}
-			if !r.acceptEndpoint(eps[i]) {
-				r.rejectedSessions.Add(1)
-				continue
-			}
-			r.mu.Lock()
-			// Still only a prerequisite: admission requires fresh ingress endpoint
-			// and new kernel RX evidence, never this flag or UDP shape alone.
-			r.forwarded = true
-			r.mu.Unlock()
-			messages[count].Buffers[0] = packets[i][:sizes[i]]
-			messages[count].N = 0
-			messages[count].Addr = nil // connected UDP, no per-message destination override
-			count++
-		}
+		count := r.prepareKernelBatch(packets, sizes, eps, messages, n)
 		if count > 0 {
 			result, err := writeLocalBatch(r.ingressBatch, messages[:count])
-			// Preserve per-packet accounting in this first batching-only change.
-			for i := 0; i < result.packets; i++ {
-				r.toPackets.Add(1)
-				r.toBytes.Add(uint64(messages[i].N))
-			}
+			r.toPackets.Add(uint64(result.packets))
+			r.toBytes.Add(uint64(result.bytes))
 			r.localWriteBatches.Add(uint64(result.batches))
 			r.localWriteMessages.Add(uint64(result.packets))
 			r.localWriteMulti.Add(uint64(result.multiPackets))
@@ -296,17 +277,63 @@ func (r *Relay) receiveQUIC() error {
 }
 
 func (r *Relay) acceptEndpoint(endpoint conn.Endpoint) bool {
-	ep, ok := endpoint.(interface{ SessionID() uint64 })
-	if !ok || ep.SessionID() == 0 || endpoint.DstToString() != r.cfg.PeerQUICEndpoint.String() {
-		return false
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.sessionID != 0 && r.sessionID != ep.SessionID() {
+	return r.acceptEndpointLocked(endpoint)
+}
+
+// Caller holds mu. Numeric address + port comparison preserves exact endpoint
+// pinning, including IPv6 zones, without allocating strings for each packet.
+func (r *Relay) acceptEndpointLocked(endpoint conn.Endpoint) bool {
+	ep, ok := endpoint.(interface {
+		SessionID() uint64
+		DstAddrPort() netip.AddrPort
+	})
+	if !ok {
 		return false
 	}
-	r.sessionID, r.sessionEndpoint = ep.SessionID(), endpoint
+	address := ep.DstAddrPort()
+	if !address.IsValid() || address != r.cfg.PeerQUICEndpoint {
+		return false
+	}
+	id := ep.SessionID()
+	if id == 0 || (r.sessionID != 0 && r.sessionID != id) {
+		return false
+	}
+	r.sessionID, r.sessionEndpoint = id, endpoint
 	return true
+}
+
+func (r *Relay) prepareKernelBatch(packets [][]byte, sizes []int, endpoints []conn.Endpoint, messages []ipv4.Message, n int) int {
+	count, rejected, sessions := 0, uint64(0), uint64(0)
+	r.mu.Lock()
+	for i := 0; i < n; i++ {
+		if sizes[i] < 0 || sizes[i] > len(packets[i]) || !validDatagram(packets[i][:sizes[i]]) {
+			rejected++
+			continue
+		}
+		if !r.acceptEndpointLocked(endpoints[i]) {
+			sessions++
+			continue
+		}
+		messages[count].Buffers[0] = packets[i][:sizes[i]]
+		messages[count].N = 0
+		messages[count].Addr = nil
+		count++
+	}
+	// Set before writing, just as in the single-packet path. Netlink evidence
+	// of a fresh ingress endpoint AND RX progress is still required to admit WG.
+	if count > 0 {
+		r.forwarded = true
+	}
+	r.mu.Unlock()
+	if rejected > 0 {
+		r.rejected.Add(rejected)
+	}
+	if sessions > 0 {
+		r.rejectedSessions.Add(sessions)
+	}
+	return count
 }
 
 func (r *Relay) receiveKernel(socket *net.UDPConn, bootstrap bool) error {
@@ -330,13 +357,19 @@ func (r *Relay) receiveKernel(socket *net.UDPConn, bootstrap bool) error {
 			recordMaximum(&r.localReadMax, uint64(n))
 		}
 		packets = packets[:0]
+		rejected := uint64(0)
+		bytes := uint64(0)
 		for i := 0; i < n; i++ {
 			packet, valid := localPacket(messages[i], r.cfg.KernelEndpoint)
 			if !valid {
-				r.rejected.Add(1)
+				rejected++
 				continue
 			}
 			packets = append(packets, packet)
+			bytes += uint64(len(packet))
+		}
+		if rejected > 0 {
+			r.rejected.Add(rejected)
 		}
 		if len(packets) > 0 {
 			r.mu.Lock()
@@ -356,10 +389,8 @@ func (r *Relay) receiveKernel(socket *net.UDPConn, bootstrap bool) error {
 			if err := r.cfg.Bind.Send(packets, ep); err != nil {
 				return err
 			}
-			for _, packet := range packets {
-				r.fromPackets.Add(1)
-				r.fromBytes.Add(uint64(len(packet)))
-			}
+			r.fromPackets.Add(uint64(len(packets)))
+			r.fromBytes.Add(bytes)
 			r.bindSendBatches.Add(1)
 			r.bindSendMessages.Add(uint64(len(packets)))
 			if len(packets) > 1 {

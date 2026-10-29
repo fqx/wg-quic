@@ -267,3 +267,5 @@ func TestSessionPinRejectsReplacementAndOuterMigration(t *testing.T) {
 		t.Fatal("session changed on rejection")
 	}
 }
+
+func (e testEndpoint) DstAddrPort() netip.AddrPort { return e.address }

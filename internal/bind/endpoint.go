@@ -116,3 +116,18 @@ func (e *Endpoint) SessionID() uint64 {
 	}
 	return e.session.id
 }
+
+// DstAddrPort exposes the immutable destination snapshot without formatting.
+// It is routing metadata, not evidence of WireGuard authentication.
+func (e *Endpoint) DstAddrPort() netip.AddrPort {
+	if e == nil {
+		return netip.AddrPort{}
+	}
+	return e.addr
+}
+func (e *receiveEndpoint) DstAddrPort() netip.AddrPort {
+	if e == nil {
+		return netip.AddrPort{}
+	}
+	return e.addr
+}
