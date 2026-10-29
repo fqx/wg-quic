@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/net/ipv4"
+
 	armorbind "github.com/RC-CHN/wg-quic/internal/bind"
 	"github.com/RC-CHN/wg-quic/internal/telemetry"
 	"github.com/RC-CHN/wg-quic/third_party/wireguard-go/conn"
@@ -47,6 +49,19 @@ type Config struct {
 }
 
 type Stats struct {
+	LocalReadBatches        uint64 `json:"local_read_batches"`
+	LocalReadMessages       uint64 `json:"local_read_messages"`
+	LocalReadMultiMessages  uint64 `json:"local_read_multi_messages"`
+	LocalReadMax            uint64 `json:"local_read_max"`
+	LocalWriteBatches       uint64 `json:"local_write_batches"`
+	LocalWriteMessages      uint64 `json:"local_write_messages"`
+	LocalWriteMultiMessages uint64 `json:"local_write_multi_messages"`
+	LocalWriteMax           uint64 `json:"local_write_max"`
+	BindSendBatches         uint64 `json:"bind_send_batches"`
+	BindSendMessages        uint64 `json:"bind_send_messages"`
+	BindSendMultiMessages   uint64 `json:"bind_send_multi_messages"`
+	BindSendMax             uint64 `json:"bind_send_max"`
+
 	ToKernelPackets   uint64          `json:"to_kernel_packets"`
 	ToKernelBytes     uint64          `json:"to_kernel_bytes"`
 	FromKernelPackets uint64          `json:"from_kernel_packets"`
@@ -63,6 +78,7 @@ type Stats struct {
 type Relay struct {
 	cfg                                                                    Config
 	bootstrap, ingress                                                     *net.UDPConn
+	bootstrapBatch, ingressBatch                                           batchSocket
 	receive                                                                conn.ReceiveFunc
 	configured                                                             conn.Endpoint
 	initial                                                                PeerSnapshot
@@ -75,6 +91,9 @@ type Relay struct {
 	closeOnce                                                              sync.Once
 	closed                                                                 chan struct{}
 	running                                                                atomic.Bool
+	localReadBatches, localReadMessages, localReadMulti, localReadMax      atomic.Uint64
+	localWriteBatches, localWriteMessages, localWriteMulti, localWriteMax  atomic.Uint64
+	bindSendBatches, bindSendMessages, bindSendMulti, bindSendMax          atomic.Uint64
 }
 
 // Open verifies the single peer before creating a fresh ingress socket. Its
@@ -116,6 +135,8 @@ func Open(cfg Config) (_ *Relay, err error) {
 	if err != nil {
 		return nil, err
 	}
+	r.bootstrapBatch = ipv4.NewPacketConn(r.bootstrap)
+	r.ingressBatch = ipv4.NewPacketConn(r.ingress)
 	// Refuse stale endpoint evidence, even if the allocator reused a port from
 	// an earlier process. No packet has been injected from ingress yet.
 	check, err := cfg.Observer.Snapshot()
@@ -189,6 +210,12 @@ func (r *Relay) Stats() Stats {
 	s.RejectedDatagrams, s.RejectedSessions = r.rejected.Load(), r.rejectedSessions.Load()
 	s.Bootstrap = r.bootstrap.LocalAddr().(*net.UDPAddr).AddrPort()
 	s.Ingress = r.ingress.LocalAddr().(*net.UDPAddr).AddrPort()
+	s.LocalReadBatches, s.LocalReadMessages = r.localReadBatches.Load(), r.localReadMessages.Load()
+	s.LocalReadMultiMessages, s.LocalReadMax = r.localReadMulti.Load(), r.localReadMax.Load()
+	s.LocalWriteBatches, s.LocalWriteMessages = r.localWriteBatches.Load(), r.localWriteMessages.Load()
+	s.LocalWriteMultiMessages, s.LocalWriteMax = r.localWriteMulti.Load(), r.localWriteMax.Load()
+	s.BindSendBatches, s.BindSendMessages = r.bindSendBatches.Load(), r.bindSendMessages.Load()
+	s.BindSendMultiMessages, s.BindSendMax = r.bindSendMulti.Load(), r.bindSendMax.Load()
 	s.Transport = r.cfg.Bind.Stats()
 	return s
 }
@@ -215,19 +242,21 @@ func validDatagram(packet []byte) bool {
 
 func (r *Relay) receiveQUIC() error {
 	packets := make([][]byte, r.cfg.Bind.BatchSize())
+	messages := make([]ipv4.Message, len(packets))
 	for i := range packets {
 		packets[i] = make([]byte, 65535)
+		messages[i].Buffers = make([][]byte, 1)
 	}
 	sizes := make([]int, len(packets))
 	eps := make([]conn.Endpoint, len(packets))
 	for {
-		n, err := r.receive(packets, sizes, eps)
-		if err != nil {
-			return err
+		n, readErr := r.receive(packets, sizes, eps)
+		if n < 0 || n > len(packets) {
+			return errors.New("invalid Bind receive count")
 		}
-		for i := range n {
-			packet := packets[i][:sizes[i]]
-			if !validDatagram(packet) {
+		count := 0
+		for i := 0; i < n; i++ {
+			if sizes[i] < 0 || sizes[i] > len(packets[i]) || !validDatagram(packets[i][:sizes[i]]) {
 				r.rejected.Add(1)
 				continue
 			}
@@ -236,19 +265,32 @@ func (r *Relay) receiveQUIC() error {
 				continue
 			}
 			r.mu.Lock()
-			// Set before write: the observer also requires a new endpoint and
-			// kernel receive progress; neither can be caused by this boolean.
+			// Still only a prerequisite: admission requires fresh ingress endpoint
+			// and new kernel RX evidence, never this flag or UDP shape alone.
 			r.forwarded = true
 			r.mu.Unlock()
-			written, err := r.ingress.Write(packet)
+			messages[count].Buffers[0] = packets[i][:sizes[i]]
+			messages[count].N = 0
+			messages[count].Addr = nil // connected UDP, no per-message destination override
+			count++
+		}
+		if count > 0 {
+			result, err := writeLocalBatch(r.ingressBatch, messages[:count])
+			// Preserve per-packet accounting in this first batching-only change.
+			for i := 0; i < result.packets; i++ {
+				r.toPackets.Add(1)
+				r.toBytes.Add(uint64(messages[i].N))
+			}
+			r.localWriteBatches.Add(uint64(result.batches))
+			r.localWriteMessages.Add(uint64(result.packets))
+			r.localWriteMulti.Add(uint64(result.multiPackets))
+			recordMaximum(&r.localWriteMax, uint64(result.maxBatch))
 			if err != nil {
-				return fmt.Errorf("deliver to kernel: %w", err)
+				return fmt.Errorf("deliver batch to kernel: %w", err)
 			}
-			if written != len(packet) {
-				return errors.New("short UDP write to kernel")
-			}
-			r.toPackets.Add(1)
-			r.toBytes.Add(uint64(written))
+		}
+		if readErr != nil {
+			return readErr
 		}
 	}
 }
@@ -268,36 +310,66 @@ func (r *Relay) acceptEndpoint(endpoint conn.Endpoint) bool {
 }
 
 func (r *Relay) receiveKernel(socket *net.UDPConn, bootstrap bool) error {
-	// A 65536-byte buffer exceeds every IPv4 UDP payload. Oversized input is
-	// rejected whole; the relay never forwards a truncated prefix.
-	buffer := make([]byte, 65536)
+	io := r.ingressBatch
+	if bootstrap {
+		io = r.bootstrapBatch
+	}
+	messages := make([]ipv4.Message, localBatchSize)
+	for i := range messages {
+		messages[i].Buffers = [][]byte{make([]byte, 65536)}
+	}
+	packets := make([][]byte, 0, len(messages))
 	for {
-		n, err := socket.Read(buffer)
-		if err != nil {
-			return err
-		}
-		if !validDatagram(buffer[:n]) {
-			r.rejected.Add(1)
-			continue
-		}
-		r.mu.Lock()
-		ep := r.sessionEndpoint
-		authenticated := r.authenticated
-		r.mu.Unlock()
-		if bootstrap {
-			if authenticated {
-				return errors.New("kernel unexpectedly returned to bootstrap endpoint")
+		n, readErr := readLocalBatch(io, messages)
+		if n > 0 {
+			r.localReadBatches.Add(1)
+			r.localReadMessages.Add(uint64(n))
+			if n > 1 {
+				r.localReadMulti.Add(uint64(n))
 			}
-			ep = r.configured
+			recordMaximum(&r.localReadMax, uint64(n))
 		}
-		if ep == nil {
-			return errors.New("kernel replied without an ingress session")
+		packets = packets[:0]
+		for i := 0; i < n; i++ {
+			packet, valid := localPacket(messages[i], r.cfg.KernelEndpoint)
+			if !valid {
+				r.rejected.Add(1)
+				continue
+			}
+			packets = append(packets, packet)
 		}
-		if err := r.cfg.Bind.Send([][]byte{buffer[:n]}, ep); err != nil {
-			return err
+		if len(packets) > 0 {
+			r.mu.Lock()
+			ep, authenticated := r.sessionEndpoint, r.authenticated
+			r.mu.Unlock()
+			if bootstrap {
+				if authenticated {
+					return errors.New("kernel unexpectedly returned to bootstrap endpoint")
+				}
+				ep = r.configured
+			}
+			if ep == nil {
+				return errors.New("kernel replied without an ingress session")
+			}
+			// Bind.Send synchronously copies each payload into its own send buffer.
+			// No receive buffer is reused until the entire batch has been consumed.
+			if err := r.cfg.Bind.Send(packets, ep); err != nil {
+				return err
+			}
+			for _, packet := range packets {
+				r.fromPackets.Add(1)
+				r.fromBytes.Add(uint64(len(packet)))
+			}
+			r.bindSendBatches.Add(1)
+			r.bindSendMessages.Add(uint64(len(packets)))
+			if len(packets) > 1 {
+				r.bindSendMulti.Add(uint64(len(packets)))
+			}
+			recordMaximum(&r.bindSendMax, uint64(len(packets)))
 		}
-		r.fromPackets.Add(1)
-		r.fromBytes.Add(uint64(n))
+		if readErr != nil {
+			return readErr
+		}
 	}
 }
 
